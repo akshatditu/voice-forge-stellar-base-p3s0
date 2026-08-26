@@ -148,6 +148,14 @@ function PracticeContent() {
   const { user } = useAuth()
   const userId = user?.id
 
+  // Temporary, development-only diagnostic panel. Visible ONLY with ?diagnostics=1
+  // in the URL, so a real Android device can be tested without Chrome Remote
+  // Debugging or USB debugging. Never sends data anywhere; state is local only
+  // and every write below is guarded by this flag, so with the flag absent
+  // (the default), zero extra state updates or renders occur.
+  const diagnosticsEnabled = params.get('diagnostics') === '1'
+  const [diag, setDiag] = useState<Record<string, any>>({})
+
   const [activeMode, setActiveMode] = useState<'av' | 'audio'>(requestedMode)
   const [retryToken, setRetryToken] = useState(0)
   const [mediaError, setMediaError] = useState<string | null>(null)
@@ -210,6 +218,16 @@ function PracticeContent() {
         ;[mobileVideoRef, desktopVideoRef].forEach((ref) => {
           if (ref.current) ref.current.srcObject = stream
         })
+        if (diagnosticsEnabled) {
+          const audioTrack = stream.getAudioTracks()[0]
+          setDiag((prev) => ({
+            ...prev,
+            trackReadyState: audioTrack?.readyState,
+            trackEnabled: audioTrack?.enabled,
+            trackMuted: audioTrack?.muted,
+            trackSettings: audioTrack ? JSON.stringify(audioTrack.getSettings()) : '(no audio track)',
+          }))
+        }
         trackEvent('permissions_granted', {
           scenario_type: SCENARIO_TYPE,
           question_number: currentQuestion,
@@ -319,11 +337,36 @@ function PracticeContent() {
       try {
         const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
         const supportedMime = mimeCandidates.find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(m))
+        if (diagnosticsEnabled) {
+          setDiag((prev) => ({ ...prev, mimeType: supportedMime || '(none supported)' }))
+        }
         const recorder = supportedMime
           ? new MediaRecorder(streamRef.current, { mimeType: supportedMime })
           : new MediaRecorder(streamRef.current)
         recorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data)
+          if (diagnosticsEnabled) {
+            setDiag((prev) => ({
+              ...prev,
+              chunkCount: recordedChunksRef.current.length,
+              chunkSizes: recordedChunksRef.current.map((c) => c.size).join(', '),
+            }))
+          }
+        }
+        if (diagnosticsEnabled) {
+          recorder.onstart = () => {
+            const t = streamRef.current?.getAudioTracks()[0]
+            setDiag((prev) => ({
+              ...prev,
+              recorderState: recorder.state,
+              trackReadyState: t?.readyState,
+              trackMuted: t?.muted,
+              trackEnabled: t?.enabled,
+            }))
+          }
+          recorder.onerror = (e: any) => {
+            setDiag((prev) => ({ ...prev, recorderError: String(e?.error || e) }))
+          }
         }
         recorder.start()
         mediaRecorderRef.current = recorder
@@ -360,6 +403,10 @@ function PracticeContent() {
       blob = new Blob(recordedChunksRef.current, { type: recorder?.mimeType || 'audio/webm' })
     }
 
+    if (diagnosticsEnabled) {
+      setDiag((prev) => ({ ...prev, blobSize: blob?.size ?? 0, blobType: blob?.type ?? '(no blob)' }))
+    }
+
     sessionStorage.setItem(`outloud_question_${currentQuestion}`, question.prompt)
 
     let authoritativeText = ''
@@ -373,6 +420,9 @@ function PracticeContent() {
         formData.append('question_number', String(currentQuestion))
         const res = await fetch('/api/transcribe', { method: 'POST', body: formData })
         const data = await res.json().catch(() => ({}))
+        if (diagnosticsEnabled) {
+          setDiag((prev) => ({ ...prev, transcribeStatus: res.status, transcribeBody: JSON.stringify(data) }))
+        }
         if (data?.error === 'not_configured') {
           transcriptionUnsupported = true
         } else if (typeof data?.text === 'string') {
@@ -588,6 +638,25 @@ function PracticeContent() {
           </div>
         </div>
       </main>
+
+      {diagnosticsEnabled && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 max-h-[45vh] overflow-y-auto bg-black/90 text-green-400 text-[10px] leading-relaxed font-mono p-3 whitespace-pre-wrap">
+          <div className="font-bold text-white mb-1">DIAGNOSTICS (dev only — ?diagnostics=1)</div>
+          <div>track.readyState: {String(diag.trackReadyState)}</div>
+          <div>track.enabled: {String(diag.trackEnabled)}</div>
+          <div>track.muted: {String(diag.trackMuted)}</div>
+          <div>track.getSettings(): {diag.trackSettings}</div>
+          <div>MediaRecorder mimeType: {diag.mimeType}</div>
+          <div>recorder.state (onstart): {diag.recorderState}</div>
+          <div>recorder error: {diag.recorderError}</div>
+          <div>chunk count: {diag.chunkCount}</div>
+          <div>chunk sizes: {diag.chunkSizes}</div>
+          <div>final blob size: {diag.blobSize}</div>
+          <div>final blob type: {diag.blobType}</div>
+          <div>/api/transcribe status: {diag.transcribeStatus}</div>
+          <div>/api/transcribe body: {diag.transcribeBody}</div>
+        </div>
+      )}
     </div>
   )
 }
