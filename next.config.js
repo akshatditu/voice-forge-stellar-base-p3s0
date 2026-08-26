@@ -58,6 +58,16 @@ const nextConfig = {
       .filter(Boolean),
   ],
 
+  // ffmpeg-static resolves its binary path dynamically (path.join(__dirname, ...))
+  // in /api/transcribe's remux step, which Next's output file tracer cannot follow
+  // statically. Without this, the traced production bundle (.next/standalone, and
+  // any other build consuming the same route trace manifest) omits the ffmpeg
+  // binary entirely, so the webm->ogg remux silently fails at runtime and the raw
+  // webm falls through to Gemini in an unsupported format.
+  outputFileTracingIncludes: {
+    '/api/transcribe': ['./node_modules/ffmpeg-static/ffmpeg'],
+  },
+
   // Stable since Next.js 15 — no longer under experimental
   optimizePackageImports: [
     'lucide-react',
