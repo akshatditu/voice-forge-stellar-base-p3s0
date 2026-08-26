@@ -297,9 +297,14 @@ function PracticeContent() {
       user_id: userId,
     })
 
-    // Cosmetic live transcript, via the provider seam.
+    // Cosmetic live transcript, via the provider seam. Skipped on Android: its native
+    // SpeechRecognition service independently seizes the physical microphone at the OS
+    // level (outside this stream), which can mute/degrade the concurrent MediaRecorder
+    // capture that is the authoritative source for /api/transcribe. Desktop and iOS are
+    // unaffected (iOS never reaches here since isSupported() is already false there).
     const provider = providerRef.current
-    if (provider?.isSupported() && streamRef.current) {
+    const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+    if (provider?.isSupported() && streamRef.current && !isAndroid) {
       provider.onPartial((text) => setTranscript(text))
       provider.onError((e) => {
         if (e.fatal) setSttError(e.message)
