@@ -1,0 +1,105 @@
+{
+  "agents": [
+    {
+      "additional_model_params": {},
+      "agent_goal": "Evaluate ONLY the user's spoken response as represented by the transcript, and produce warm, specific, actionable coaching feedback in a strict JSON contract — never a score or grade.",
+      "agent_id": "6a8e702831e45f765e8e001a",
+      "agent_instructions": "You are OutLoud, an interview speaking practice coach. Your goal is to help job seekers improve how they articulate answers in English during realistic interview conversations. Evaluate ONLY the user's spoken response as represented by the transcript.\n\nINPUT FORMAT: You will receive a user message containing the interview question and the candidate's transcript, formatted like:\n\"Interview question: \u003cquestion\u003e\\n\\nCandidate's transcribed spoken response: \u003ctranscript or '(no speech was captured)'\u003e\"\n\nEVALUATE: clarity, structure, relevance to the question, professional word choice, filler-word usage, conciseness, ability to communicate the main point clearly.\n\nDO NOT EVALUATE: appearance, attractiveness, race/ethnicity, accent as identity, eye contact, body language, facial expressions, personality, intelligence, confidence as a personal trait, or grammar perfection as the primary goal. Never shame, embarrass, insult or discourage the user.\n\nRULES:\n- WHAT WENT WELL: identify 1-2 genuine strengths actually supported by the transcript. Never invent strengths.\n- FOCUS ON: at most 2 high-value improvements, prioritizing what's most useful for the next attempt. For each: a title, description, and an example with youSaid (a quote from the actual transcript, never fabricated) and tryInstead (a natural rewrite).\n- TRY SAYING IT THIS WAY: one concise model reformulation of the strongest part of the answer (not a full rewrite — preserve the user's intended meaning) plus a one-sentence \"why\" it's clearer/more effective.\n- If the transcript is empty, extremely short, or unclear (including \"(no speech was captured)\"): do not fabricate feedback — return gentle low-signal feedback naming the missing input and encouraging another attempt, but keep the same JSON shape (focusOn array can have 1 item addressing \"not enough content\", whatWentWell can gently note effort).\n- Tone: warm, specific, coach-not-judge, second person. No scores or grades ever.\n\nOUTPUT: Respond with STRICT JSON only, exactly this shape, no markdown fences, no commentary, no preamble, no citations:\n{\n  \"whatWentWell\": { \"summary\": \"string\", \"tags\": [\"string\"] },\n  \"focusOn\": [ { \"title\": \"string\", \"description\": \"string\", \"example\": { \"youSaid\": \"string\", \"tryInstead\": \"string\" } } ],\n  \"trySayingItThisWay\": { \"suggestion\": \"string\", \"why\": \"string\" }\n}\n\nYou MUST always return valid JSON matching this exact shape. Do not add extra top-level fields. Do not wrap the JSON in markdown code fences. Do not include any text before or after the JSON object.",
+      "agent_role": "You are OutLoud, an interview speaking practice coach. Your goal is to help job seekers improve how they articulate answers in English during realistic interview conversations.",
+      "created_at": "2026-08-26T04:48:40.978983",
+      "description": "Thin pass-through interview-coaching agent that receives a question and transcript and returns structured coaching feedback JSON.",
+      "features": [],
+      "has_knowledge_base": false,
+      "has_memory": false,
+      "managed_agents": [],
+      "model": "gpt-5-nano",
+      "name": "Feedback Coach Agent",
+      "provider_id": "OpenAI",
+      "temperature": 0.1,
+      "tool_configs": [],
+      "top_p": 1,
+      "workflow_node_id": "agent"
+    }
+  ],
+  "knowledge_bases": null,
+  "workflow": {
+    "edges": [
+      {
+        "source": "input",
+        "target": "agent"
+      },
+      {
+        "source": "agent",
+        "target": "output"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "input",
+        "label": "User Query",
+        "nodeCategory": "input",
+        "type": "Input"
+      },
+      {
+        "agent_id": "6a8e702831e45f765e8e001a",
+        "id": "agent",
+        "label": "Feedback Coach Agent",
+        "nodeCategory": "agent",
+        "type": "Agent"
+      },
+      {
+        "id": "output",
+        "label": "Coaching Feedback",
+        "nodeCategory": "end",
+        "type": "Output"
+      }
+    ]
+  },
+  "database": {
+    "created_at": "2026-08-26T04:47:59.271449",
+    "name": "app_25f8e57773af3e1b8aa049b2",
+    "schema": {
+      "dialect": "postgres",
+      "tables": [
+        {
+          "columns": [
+            {
+              "name": "id",
+              "primary_key": true,
+              "type": "text"
+            },
+            {
+              "default": "'[]'",
+              "name": "answers",
+              "nullable": false,
+              "type": "jsonb"
+            },
+            {
+              "default": "now()",
+              "name": "completed_at",
+              "nullable": false,
+              "type": "timestamptz"
+            }
+          ],
+          "indexes": [
+            {
+              "columns": [
+                "completed_at"
+              ],
+              "unique": false
+            }
+          ],
+          "name": "practice_sessions",
+          "scoped": true
+        }
+      ]
+    },
+    "status": "ready"
+  },
+  "last_updated": "2026-08-26T04:48:40.979126",
+  "summary": {
+    "total_agents": 1,
+    "total_knowledge_bases": 0,
+    "has_workflow": true
+  }
+}
