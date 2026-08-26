@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { spawn } from 'node:child_process'
 import { Readable } from 'node:stream'
+import path from 'node:path'
+import fs from 'node:fs'
 
 // Plain server route — NOT an agent. Receives a recorded interview answer as
 // a multipart audio blob, remuxes Android's WebM/Opus into Ogg/Opus when
@@ -19,14 +21,28 @@ const SYSTEM_INSTRUCTION =
   'If the audio is silent or contains no discernible speech, output an empty string. ' +
   'Never fabricate words that are not present in the audio. Output only the transcript text, nothing else.'
 
-async function remuxWebmToOgg(inputBuffer: Buffer): Promise<Buffer | null> {
-  let ffmpegPath: string
+// ffmpeg-static's own path resolver breaks once webpack inlines it into this
+// route's compiled bundle (its `__dirname` collapses to route.js's own directory
+// instead of ffmpeg-static's package directory — see next.config.js comment on
+// outputFileTracingIncludes). process.cwd() is a runtime OS-level value, not a
+// per-file lexical binding, so webpack cannot rewrite it; it resolves to the
+// standalone deploy root, which is exactly where outputFileTracingIncludes ships
+// the binary (node_modules/ffmpeg-static/ffmpeg relative to that same root).
+function resolveFfmpegPath(): string | null {
+  const candidates: (string | null)[] = [
+    path.join(process.cwd(), 'node_modules', 'ffmpeg-static', 'ffmpeg'),
+  ]
   try {
-    ffmpegPath = require('ffmpeg-static')
-    if (!ffmpegPath) return null
+    candidates.push(require('ffmpeg-static'))
   } catch {
-    return null
+    // ffmpeg-static's own resolver failed to load; the explicit candidate above still applies.
   }
+  return candidates.find((p): p is string => !!p && fs.existsSync(p)) ?? null
+}
+
+async function remuxWebmToOgg(inputBuffer: Buffer): Promise<Buffer | null> {
+  const ffmpegPath = resolveFfmpegPath()
+  if (!ffmpegPath) return null
 
   const attempt = (args: string[]): Promise<Buffer | null> =>
     new Promise((resolve) => {
